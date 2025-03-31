@@ -1,0 +1,136 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs
+logs/
+*.log
+*.log.*
+debug.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+.cache/
+.next/
+.nuxt/
+.svelte-kit/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# IDE specific files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Optional npm cache directory
+.npm/
+.nvm/
+
+# Testing
+coverage/
+*.lcov
+.nyc_output/
+
+# Linting
+.eslintcache
+.stylelintcache
+
+# Dependency directories
+jspm_packages/
+bower_components/
+
+# TypeScript
+*.tsbuildinfo
+
+# Package manager lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Static site generators
+.cache/
+public/
+
+# Python virtual environments
+venv/
+__pycache__/
+
+# Miscellaneous
+*.bak
+*.orig
+*.swp
+*.lock
+*.pid
+*.seed
+*.pid.lock
+
+# Compiled files
+*.out
+*.exe
+*.dll
+*.class
+*.pyc
+*.pyo
+*.pyd
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# AWS SAM build artifacts
+.aws-sam/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Kubernetes
+*.kube/
+
+# Docker
+*.dockerignore
+.docker/
+docker-compose.override.yml
+
+# JetBrains
+.idea/
+*.iml
