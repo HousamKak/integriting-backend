@@ -173,7 +173,7 @@ const initializeDatabase = async () => {
         )
       `);
       
-      // Create WhistleblowerReports table (including previously missing columns)
+      // Create WhistleblowerReports table
       await runQuery(db, `
         CREATE TABLE WhistleblowerReports (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

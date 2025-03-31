@@ -1,92 +1,95 @@
 // controllers/newspaperController.js
-const sql = require('mssql');
-const { getConnection } = require('../config/database.sqlserver');
+const { getConnection, getQuery, getAllQuery, runQuery } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
 // Get all newspapers
 exports.getAllNewspapers = async (req, res) => {
   const { year } = req.query;
+  let db;
   
   try {
-    const pool = await getConnection();
+    db = await getConnection();
+    
     let query = `
       SELECT * FROM Newspapers
       ORDER BY issue_date DESC
     `;
     
+    let params = [];
+    
     // If year is provided, filter by year
     if (year && year !== 'All') {
       query = `
         SELECT * FROM Newspapers
-        WHERE YEAR(issue_date) = @year
+        WHERE strftime('%Y', issue_date) = ?
         ORDER BY issue_date DESC
       `;
+      params = [year];
     }
     
-    const request = pool.request();
+    const newspapers = await getAllQuery(db, query, params);
     
-    if (year && year !== 'All') {
-      request.input('year', sql.Int, parseInt(year));
-    }
-    
-    const result = await request.query(query);
-    
-    res.status(200).json(result.recordset);
+    res.status(200).json(newspapers);
   } catch (err) {
     console.error('Error fetching newspapers:', err);
     res.status(500).json({ message: 'Failed to retrieve newspapers' });
+  } finally {
+    if (db) db.close();
   }
 };
 
 // Get latest newspaper
 exports.getLatestNewspaper = async (req, res) => {
+  let db;
+  
   try {
-    const pool = await getConnection();
-    const result = await pool.request()
-      .query(`
-        SELECT TOP 1 * FROM Newspapers
-        ORDER BY issue_date DESC
-      `);
+    db = await getConnection();
+    const newspaper = await getQuery(db, `
+      SELECT * FROM Newspapers
+      ORDER BY issue_date DESC
+      LIMIT 1
+    `);
     
-    if (result.recordset.length === 0) {
+    if (!newspaper) {
       return res.status(404).json({ message: 'No newspapers found' });
     }
     
-    res.status(200).json(result.recordset[0]);
+    res.status(200).json(newspaper);
   } catch (err) {
     console.error('Error fetching latest newspaper:', err);
     res.status(500).json({ message: 'Failed to retrieve latest newspaper' });
+  } finally {
+    if (db) db.close();
   }
 };
 
 // Get newspaper by ID
 exports.getNewspaperById = async (req, res) => {
   const { id } = req.params;
+  let db;
   
   try {
-    const pool = await getConnection();
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query(`
-        SELECT * FROM Newspapers
-        WHERE id = @id
-      `);
+    db = await getConnection();
+    const newspaper = await getQuery(db, 'SELECT * FROM Newspapers WHERE id = ?', [id]);
     
-    if (result.recordset.length === 0) {
+    if (!newspaper) {
       return res.status(404).json({ message: 'Newspaper not found' });
     }
     
-    res.status(200).json(result.recordset[0]);
+    res.status(200).json(newspaper);
   } catch (err) {
     console.error(`Error fetching newspaper with ID ${id}:`, err);
     res.status(500).json({ message: 'Failed to retrieve newspaper' });
+  } finally {
+    if (db) db.close();
   }
 };
 
 // Create new newspaper
 exports.createNewspaper = async (req, res) => {
   const { title, description, issue_date } = req.body;
+  let db;
   
   // Check if required files are present
   if (!req.files || !req.files.pdf_file) {
@@ -99,22 +102,21 @@ exports.createNewspaper = async (req, res) => {
     req.files.cover_image[0].path.replace(/\\/g, '/') : null;
   
   try {
-    const pool = await getConnection();
-    const result = await pool.request()
-      .input('title', sql.NVarChar(255), title)
-      .input('description', sql.NVarChar(sql.MAX), description)
-      .input('pdf_file_path', sql.NVarChar(255), pdfFilePath)
-      .input('issue_date', sql.Date, new Date(issue_date))
-      .input('cover_image_path', sql.NVarChar(255), coverImagePath)
-      .query(`
-        INSERT INTO Newspapers (title, description, pdf_file_path, issue_date, cover_image_path)
-        OUTPUT INSERTED.id
-        VALUES (@title, @description, @pdf_file_path, @issue_date, @cover_image_path)
-      `);
+    db = await getConnection();
+    const result = await runQuery(db, `
+      INSERT INTO Newspapers (
+        title, description, pdf_file_path, issue_date, cover_image_path
+      ) VALUES (?, ?, ?, ?, ?)
+    `, [
+      title, 
+      description, 
+      pdfFilePath, 
+      issue_date, 
+      coverImagePath
+    ]);
     
-    const id = result.recordset[0].id;
     res.status(201).json({ 
-      id, 
+      id: result.lastID, 
       message: 'Newspaper created successfully',
       pdf_file_path: pdfFilePath,
       cover_image_path: coverImagePath
@@ -135,6 +137,8 @@ exports.createNewspaper = async (req, res) => {
     
     console.error('Error creating newspaper:', err);
     res.status(500).json({ message: 'Failed to create newspaper' });
+  } finally {
+    if (db) db.close();
   }
 };
 
@@ -142,63 +146,57 @@ exports.createNewspaper = async (req, res) => {
 exports.updateNewspaper = async (req, res) => {
   const { id } = req.params;
   const { title, description, issue_date } = req.body;
+  let db;
   
   try {
-    const pool = await getConnection();
+    db = await getConnection();
     
     // Get current newspaper data
-    const currentNewspaper = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT pdf_file_path, cover_image_path FROM Newspapers WHERE id = @id');
+    const currentNewspaper = await getQuery(db, 
+      'SELECT pdf_file_path, cover_image_path FROM Newspapers WHERE id = ?', 
+      [id]
+    );
     
-    if (currentNewspaper.recordset.length === 0) {
+    if (!currentNewspaper) {
       return res.status(404).json({ message: 'Newspaper not found' });
     }
     
-    const oldPdfPath = currentNewspaper.recordset[0].pdf_file_path;
-    const oldCoverPath = currentNewspaper.recordset[0].cover_image_path;
+    const oldPdfPath = currentNewspaper.pdf_file_path;
+    const oldCoverPath = currentNewspaper.cover_image_path;
     
-    // Prepare query parts
-    let updateQuery = `
+    // Determine file paths to use
+    const pdfFilePath = req.files && req.files.pdf_file ? 
+      req.files.pdf_file[0].path.replace(/\\/g, '/') : oldPdfPath;
+    
+    const coverImagePath = req.files && req.files.cover_image ? 
+      req.files.cover_image[0].path.replace(/\\/g, '/') : oldCoverPath;
+    
+    await runQuery(db, `
       UPDATE Newspapers
-      SET 
-        title = @title,
-        description = @description,
-        issue_date = @issue_date,
-        updated_at = @updated_at
-    `;
-    
-    const request = pool.request()
-      .input('id', sql.Int, id)
-      .input('title', sql.NVarChar(255), title)
-      .input('description', sql.NVarChar(sql.MAX), description)
-      .input('issue_date', sql.Date, new Date(issue_date))
-      .input('updated_at', sql.DateTime, new Date());
-    
-    // If there's a new PDF file, update the pdf_file_path
-    if (req.files && req.files.pdf_file) {
-      updateQuery += `, pdf_file_path = @pdf_file_path`;
-      request.input('pdf_file_path', sql.NVarChar(255), req.files.pdf_file[0].path.replace(/\\/g, '/'));
-    }
-    
-    // If there's a new cover image, update the cover_image_path
-    if (req.files && req.files.cover_image) {
-      updateQuery += `, cover_image_path = @cover_image_path`;
-      request.input('cover_image_path', sql.NVarChar(255), req.files.cover_image[0].path.replace(/\\/g, '/'));
-    }
-    
-    updateQuery += ` WHERE id = @id`;
-    
-    await request.query(updateQuery);
+      SET title = ?,
+          description = ?,
+          pdf_file_path = ?,
+          issue_date = ?,
+          cover_image_path = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [
+      title,
+      description,
+      pdfFilePath,
+      issue_date,
+      coverImagePath,
+      id
+    ]);
     
     // Delete old files if they were replaced
-    if (req.files && req.files.pdf_file && oldPdfPath) {
+    if (req.files && req.files.pdf_file && oldPdfPath && oldPdfPath !== pdfFilePath) {
       fs.unlink(oldPdfPath, (unlinkErr) => {
         if (unlinkErr) console.error(`Error deleting old PDF file: ${unlinkErr}`);
       });
     }
     
-    if (req.files && req.files.cover_image && oldCoverPath) {
+    if (req.files && req.files.cover_image && oldCoverPath && oldCoverPath !== coverImagePath) {
       fs.unlink(oldCoverPath, (unlinkErr) => {
         if (unlinkErr) console.error(`Error deleting old cover image: ${unlinkErr}`);
       });
@@ -206,8 +204,8 @@ exports.updateNewspaper = async (req, res) => {
     
     res.status(200).json({ 
       message: 'Newspaper updated successfully',
-      pdf_file_path: req.files && req.files.pdf_file ? req.files.pdf_file[0].path.replace(/\\/g, '/') : undefined,
-      cover_image_path: req.files && req.files.cover_image ? req.files.cover_image[0].path.replace(/\\/g, '/') : undefined
+      pdf_file_path: req.files && req.files.pdf_file ? pdfFilePath : undefined,
+      cover_image_path: req.files && req.files.cover_image ? coverImagePath : undefined
     });
   } catch (err) {
     // Cleanup any newly uploaded files on error
@@ -227,42 +225,41 @@ exports.updateNewspaper = async (req, res) => {
     
     console.error(`Error updating newspaper with ID ${id}:`, err);
     res.status(500).json({ message: 'Failed to update newspaper' });
+  } finally {
+    if (db) db.close();
   }
 };
 
 // Delete newspaper
 exports.deleteNewspaper = async (req, res) => {
   const { id } = req.params;
+  let db;
   
   try {
-    const pool = await getConnection();
+    db = await getConnection();
     
     // First, get the newspaper to find file paths for deletion
-    const getNewspaper = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT pdf_file_path, cover_image_path FROM Newspapers WHERE id = @id');
+    const newspaper = await getQuery(db, 
+      'SELECT pdf_file_path, cover_image_path FROM Newspapers WHERE id = ?', 
+      [id]
+    );
     
-    if (getNewspaper.recordset.length === 0) {
+    if (!newspaper) {
       return res.status(404).json({ message: 'Newspaper not found' });
     }
     
-    const pdfFilePath = getNewspaper.recordset[0].pdf_file_path;
-    const coverImagePath = getNewspaper.recordset[0].cover_image_path;
-    
     // Delete the newspaper
-    await pool.request()
-      .input('id', sql.Int, id)
-      .query('DELETE FROM Newspapers WHERE id = @id');
+    await runQuery(db, 'DELETE FROM Newspapers WHERE id = ?', [id]);
     
     // Delete associated files
-    if (pdfFilePath) {
-      fs.unlink(pdfFilePath, (unlinkErr) => {
+    if (newspaper.pdf_file_path) {
+      fs.unlink(newspaper.pdf_file_path, (unlinkErr) => {
         if (unlinkErr) console.error(`Error deleting PDF file: ${unlinkErr}`);
       });
     }
     
-    if (coverImagePath) {
-      fs.unlink(coverImagePath, (unlinkErr) => {
+    if (newspaper.cover_image_path) {
+      fs.unlink(newspaper.cover_image_path, (unlinkErr) => {
         if (unlinkErr) console.error(`Error deleting cover image: ${unlinkErr}`);
       });
     }
@@ -271,24 +268,28 @@ exports.deleteNewspaper = async (req, res) => {
   } catch (err) {
     console.error(`Error deleting newspaper with ID ${id}:`, err);
     res.status(500).json({ message: 'Failed to delete newspaper' });
+  } finally {
+    if (db) db.close();
   }
 };
 
 // Get available years
 exports.getAvailableYears = async (req, res) => {
+  let db;
+  
   try {
-    const pool = await getConnection();
-    const result = await pool.request()
-      .query(`
-        SELECT DISTINCT YEAR(issue_date) as year
-        FROM Newspapers
-        ORDER BY year DESC
-      `);
+    db = await getConnection();
+    const years = await getAllQuery(db, `
+      SELECT DISTINCT strftime('%Y', issue_date) as year
+      FROM Newspapers
+      ORDER BY year DESC
+    `);
     
-    const years = result.recordset.map(item => item.year);
-    res.status(200).json(years);
+    res.status(200).json(years.map(item => item.year));
   } catch (err) {
     console.error('Error fetching newspaper years:', err);
     res.status(500).json({ message: 'Failed to retrieve newspaper years' });
+  } finally {
+    if (db) db.close();
   }
 };

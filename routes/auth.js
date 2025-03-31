@@ -1,8 +1,8 @@
 // routes/auth.js
 const express = require('express');
 const router = express.Router();
-const authController = require('../controllers/authController.sqlserver');
-const authMiddleware = require('../middleware/auth.sqlserver');
+const authController = require('../controllers/authController');
+const authMiddleware = require('../middleware/auth');
 
 // Public routes
 router.post('/login', authController.login);

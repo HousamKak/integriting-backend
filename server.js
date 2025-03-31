@@ -1,7 +1,7 @@
 // server.js
 require('dotenv').config();
 const app = require('./app');
-const { initializeDatabase } = require('./config/database.sqlserver');
+const { initializeDatabase } = require('./config/database');
 
 const PORT = process.env.PORT || 5000;
 

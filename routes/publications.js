@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const publicationController = require('../controllers/publicationController');
-const authMiddleware = require('../middleware/auth.sqlserver');
+const authMiddleware = require('../middleware/auth');
 const { uploadPDF } = require('../middleware/fileUpload');
 
 // Public routes

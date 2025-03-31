@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const serviceController = require('../controllers/serviceController');
-const authMiddleware = require('../middleware/auth.sqlserver');
+const authMiddleware = require('../middleware/auth');
 
 // Public routes
 router.get('/', serviceController.getAllServices);

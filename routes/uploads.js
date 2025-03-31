@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const uploadController = require('../controllers/uploadController');
-const authMiddleware = require('../middleware/auth.sqlserver');
+const authMiddleware = require('../middleware/auth');
 const { uploadPDF, uploadImage, uploadAny } = require('../middleware/fileUpload');
 
 // Protected routes (admin only)

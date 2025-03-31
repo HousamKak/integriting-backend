@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const newspaperController = require('../controllers/newspaperController');
-const authMiddleware = require('../middleware/auth.sqlserver');
+const authMiddleware = require('../middleware/auth');
 const multer = require('multer');
 const { uploadPDF, uploadImage } = require('../middleware/fileUpload');
 

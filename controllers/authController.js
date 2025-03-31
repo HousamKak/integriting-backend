@@ -2,6 +2,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getConnection, getQuery, runQuery } = require('../config/database');
+const authConfig = require('../config/auth');
 
 // User login
 exports.login = async (req, res) => {
@@ -25,8 +26,8 @@ exports.login = async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { id: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      authConfig.jwtSecret,
+      { expiresIn: authConfig.jwtExpiresIn }
     );
 
     res.status(200).json({

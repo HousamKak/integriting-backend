@@ -1,6 +1,7 @@
 // middleware/auth.js
 const jwt = require('jsonwebtoken');
 const { getConnection, getQuery } = require('../config/database');
+const authConfig = require('../config/auth');
 
 // Verify JWT token
 exports.verifyToken = (req, res, next) => {
@@ -21,7 +22,7 @@ exports.verifyToken = (req, res, next) => {
   
   try {
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, authConfig.jwtSecret);
     
     // Add user ID and role to request object
     req.userId = decoded.id;

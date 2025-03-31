@@ -98,7 +98,7 @@ exports.deleteFile = async (req, res) => {
     let found = false;
     
     // Check in each uploads subdirectory
-    const subdirs = ['pdfs', 'images', 'newspapers'];
+    const subdirs = ['pdfs', 'images', 'newspapers', 'documents', 'temp'];
     
     for (const subdir of subdirs) {
       filePath = path.join(uploadsDir, subdir, filename);

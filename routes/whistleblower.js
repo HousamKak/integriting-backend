@@ -1,8 +1,8 @@
 // routes/whistleblower.js
 const express = require('express');
 const router = express.Router();
-const whistleblowerController = require('../controllers/whistleblowerController.sqlserver');
-const authMiddleware = require('../middleware/auth.sqlserver');
+const whistleblowerController = require('../controllers/whistleblowerController');
+const authMiddleware = require('../middleware/auth');
 
 // Public routes
 router.post('/report', whistleblowerController.submitReport);
