@@ -1,64 +1,228 @@
 // scripts/seeds/runSeeds.js
 require('dotenv').config();
-const sql = require('mssql');
-const bcrypt = require('bcryptjs');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const sqlite3 = require('sqlite3').verbose();
 const logger = require('../../utils/logger');
 
-// Database configuration
-const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_NAME,
-  options: {
-    encrypt: true, // For Azure
-    trustServerCertificate: process.env.NODE_ENV !== 'production', // For local dev
-    enableArithAbort: true
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+// Ensure the data directory exists
+const dataDir = path.join(__dirname, '../../data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+// Database file path
+const dbPath = path.join(dataDir, 'integriting.db');
+
+// Get database connection
+const getConnection = () => {
+  return new Promise((resolve, reject) => {
+    const db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        logger.error('SQLite connection error:', err);
+        reject(err);
+      } else {
+        resolve(db);
+      }
+    });
+  });
+};
+
+// Run a query with parameters
+const runQuery = (db, query, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.run(query, params, function(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ lastID: this.lastID, changes: this.changes });
+      }
+    });
+  });
+};
+
+// Get all rows from a query
+const getAllQuery = (db, query, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.all(query, params, (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+};
+
+// Get a single row from a query
+const getQuery = (db, query, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.get(query, params, (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+};
+
+// Create database schema
+const createSchema = async (db) => {
+  try {
+    logger.info('Creating database schema...');
+    
+    // Enable foreign keys
+    await runQuery(db, 'PRAGMA foreign_keys = ON');
+    
+    // Create Users table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS Users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'editor',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create Categories table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS Categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create Publications table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS Publications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT,
+        summary TEXT,
+        category_id INTEGER,
+        pdf_file_path TEXT,
+        file_size INTEGER,
+        published_date DATE NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES Categories(id)
+      )
+    `);
+    
+    // Create Services table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS Services (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        icon TEXT,
+        order_number INTEGER,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create Seminars table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS Seminars (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        image_path TEXT,
+        event_date DATE NOT NULL,
+        status TEXT NOT NULL,
+        seats_available INTEGER,
+        location TEXT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create Newspapers table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS Newspapers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        pdf_file_path TEXT NOT NULL,
+        issue_date DATE NOT NULL,
+        cover_image_path TEXT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create WhistleblowerReports table
+    await runQuery(db, `
+      CREATE TABLE IF NOT EXISTS WhistleblowerReports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT,
+        message TEXT NOT NULL,
+        is_anonymous INTEGER NOT NULL DEFAULT 1,
+        reference_number TEXT,
+        admin_notes TEXT,
+        status TEXT NOT NULL DEFAULT 'Pending',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    logger.info('Database schema created successfully');
+  } catch (err) {
+    logger.error('Failed to create schema:', err);
+    throw err;
   }
 };
 
 // Database seeding functions
 const runSeeds = async () => {
+  let db;
+  
   try {
     logger.info('Starting database seeding...');
     
     // Connect to database
-    const pool = await sql.connect(config);
+    db = await getConnection();
+    
+    // Create database tables
+    await createSchema(db);
     
     // Run seeds in sequence
-    await seedUsers(pool);
-    await seedCategories(pool);
-    await seedServices(pool);
-    await seedSeminars(pool);
-    await seedPublications(pool);
-    await seedNewspapers(pool);
+    await seedUsers(db);
+    await seedCategories(db);
+    await seedServices(db);
+    await seedSeminars(db);
+    await seedPublications(db);
+    await seedNewspapers(db);
     
     logger.info('All seeds completed successfully.');
     
     // Close the connection
-    await pool.close();
+    db.close();
   } catch (err) {
     logger.error('Seeding error:', err);
+    if (db) db.close();
     process.exit(1);
   }
 };
 
 // Seed users
-const seedUsers = async (pool) => {
+const seedUsers = async (db) => {
   try {
     logger.info('Seeding users...');
     
     // Check if any users exist
-    const userCount = await pool.request().query('SELECT COUNT(*) as count FROM Users');
+    const userCount = await getQuery(db, 'SELECT COUNT(*) as count FROM Users');
     
-    if (userCount.recordset[0].count > 0) {
+    if (userCount && userCount.count > 0) {
       logger.info('Users already exist, skipping user seeding.');
       return;
     }
@@ -67,28 +231,18 @@ const seedUsers = async (pool) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD || 'admin123', salt);
     
-    await pool.request()
-      .input('username', sql.NVarChar(50), 'admin')
-      .input('email', sql.NVarChar(100), process.env.ADMIN_EMAIL || 'admin@integriting.com')
-      .input('password_hash', sql.NVarChar(255), passwordHash)
-      .input('role', sql.NVarChar(20), 'admin')
-      .query(`
-        INSERT INTO Users (username, email, password_hash, role)
-        VALUES (@username, @email, @password_hash, @role)
-      `);
+    await runQuery(db, `
+      INSERT INTO Users (username, email, password_hash, role)
+      VALUES (?, ?, ?, ?)
+    `, ['admin', process.env.ADMIN_EMAIL || 'admin@integriting.com', passwordHash, 'admin']);
     
     // Create default editor user
     const editorPasswordHash = await bcrypt.hash('editor123', salt);
     
-    await pool.request()
-      .input('username', sql.NVarChar(50), 'editor')
-      .input('email', sql.NVarChar(100), 'editor@integriting.com')
-      .input('password_hash', sql.NVarChar(255), editorPasswordHash)
-      .input('role', sql.NVarChar(20), 'editor')
-      .query(`
-        INSERT INTO Users (username, email, password_hash, role)
-        VALUES (@username, @email, @password_hash, @role)
-      `);
+    await runQuery(db, `
+      INSERT INTO Users (username, email, password_hash, role)
+      VALUES (?, ?, ?, ?)
+    `, ['editor', 'editor@integriting.com', editorPasswordHash, 'editor']);
     
     logger.info('Users seeded successfully.');
   } catch (err) {
@@ -98,14 +252,14 @@ const seedUsers = async (pool) => {
 };
 
 // Seed categories
-const seedCategories = async (pool) => {
+const seedCategories = async (db) => {
   try {
     logger.info('Seeding categories...');
     
     // Check if any categories exist
-    const categoryCount = await pool.request().query('SELECT COUNT(*) as count FROM Categories');
+    const categoryCount = await getQuery(db, 'SELECT COUNT(*) as count FROM Categories');
     
-    if (categoryCount.recordset[0].count > 0) {
+    if (categoryCount && categoryCount.count > 0) {
       logger.info('Categories already exist, skipping category seeding.');
       return;
     }
@@ -120,12 +274,10 @@ const seedCategories = async (pool) => {
     
     // Insert categories
     for (const category of categories) {
-      await pool.request()
-        .input('name', sql.NVarChar(50), category)
-        .query(`
-          INSERT INTO Categories (name)
-          VALUES (@name)
-        `);
+      await runQuery(db, `
+        INSERT INTO Categories (name)
+        VALUES (?)
+      `, [category]);
     }
     
     logger.info('Categories seeded successfully.');
@@ -136,14 +288,14 @@ const seedCategories = async (pool) => {
 };
 
 // Seed services
-const seedServices = async (pool) => {
+const seedServices = async (db) => {
   try {
     logger.info('Seeding services...');
     
     // Check if any services exist
-    const serviceCount = await pool.request().query('SELECT COUNT(*) as count FROM Services');
+    const serviceCount = await getQuery(db, 'SELECT COUNT(*) as count FROM Services');
     
-    if (serviceCount.recordset[0].count > 0) {
+    if (serviceCount && serviceCount.count > 0) {
       logger.info('Services already exist, skipping service seeding.');
       return;
     }
@@ -190,15 +342,10 @@ const seedServices = async (pool) => {
     
     // Insert services
     for (const service of services) {
-      await pool.request()
-        .input('title', sql.NVarChar(100), service.title)
-        .input('description', sql.NVarChar(sql.MAX), service.description)
-        .input('icon', sql.NVarChar(100), service.icon)
-        .input('order_number', sql.Int, service.order_number)
-        .query(`
-          INSERT INTO Services (title, description, icon, order_number)
-          VALUES (@title, @description, @icon, @order_number)
-        `);
+      await runQuery(db, `
+        INSERT INTO Services (title, description, icon, order_number)
+        VALUES (?, ?, ?, ?)
+      `, [service.title, service.description, service.icon, service.order_number]);
     }
     
     logger.info('Services seeded successfully.');
@@ -209,16 +356,22 @@ const seedServices = async (pool) => {
 };
 
 // Seed seminars
-const seedSeminars = async (pool) => {
+const seedSeminars = async (db) => {
   try {
     logger.info('Seeding seminars...');
     
     // Check if any seminars exist
-    const seminarCount = await pool.request().query('SELECT COUNT(*) as count FROM Seminars');
+    const seminarCount = await getQuery(db, 'SELECT COUNT(*) as count FROM Seminars');
     
-    if (seminarCount.recordset[0].count > 0) {
+    if (seminarCount && seminarCount.count > 0) {
       logger.info('Seminars already exist, skipping seminar seeding.');
       return;
+    }
+    
+    // Create uploads directories if they don't exist
+    const uploadsDir = path.join(__dirname, '../../uploads/images');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
     }
     
     // Default seminars
@@ -276,18 +429,18 @@ const seedSeminars = async (pool) => {
     
     // Insert seminars
     for (const seminar of seminars) {
-      await pool.request()
-        .input('title', sql.NVarChar(255), seminar.title)
-        .input('description', sql.NVarChar(sql.MAX), seminar.description)
-        .input('image_path', sql.NVarChar(255), seminar.image_path)
-        .input('event_date', sql.Date, new Date(seminar.event_date))
-        .input('status', sql.NVarChar(20), seminar.status)
-        .input('seats_available', sql.Int, seminar.seats_available)
-        .input('location', sql.NVarChar(255), seminar.location)
-        .query(`
-          INSERT INTO Seminars (title, description, image_path, event_date, status, seats_available, location)
-          VALUES (@title, @description, @image_path, @event_date, @status, @seats_available, @location)
-        `);
+      await runQuery(db, `
+        INSERT INTO Seminars (title, description, image_path, event_date, status, seats_available, location)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        seminar.title, 
+        seminar.description, 
+        seminar.image_path, 
+        seminar.event_date, 
+        seminar.status, 
+        seminar.seats_available, 
+        seminar.location
+      ]);
     }
     
     logger.info('Seminars seeded successfully.');
@@ -298,22 +451,28 @@ const seedSeminars = async (pool) => {
 };
 
 // Seed publications
-const seedPublications = async (pool) => {
+const seedPublications = async (db) => {
   try {
     logger.info('Seeding publications...');
     
     // Check if any publications exist
-    const publicationCount = await pool.request().query('SELECT COUNT(*) as count FROM Publications');
+    const publicationCount = await getQuery(db, 'SELECT COUNT(*) as count FROM Publications');
     
-    if (publicationCount.recordset[0].count > 0) {
+    if (publicationCount && publicationCount.count > 0) {
       logger.info('Publications already exist, skipping publication seeding.');
       return;
     }
     
+    // Create uploads directories if they don't exist
+    const uploadsDir = path.join(__dirname, '../../uploads/pdfs');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
     // Get category IDs
-    const categories = await pool.request().query('SELECT id, name FROM Categories');
+    const categories = await getAllQuery(db, 'SELECT id, name FROM Categories');
     const categoryMap = {};
-    categories.recordset.forEach(cat => {
+    categories.forEach(cat => {
       categoryMap[cat.name] = cat.id;
     });
     
@@ -369,18 +528,18 @@ const seedPublications = async (pool) => {
     
     // Insert publications
     for (const pub of publications) {
-      await pool.request()
-        .input('title', sql.NVarChar(255), pub.title)
-        .input('summary', sql.NVarChar(500), pub.summary)
-        .input('content', sql.NVarChar(sql.MAX), pub.content)
-        .input('category_id', sql.Int, pub.category_id)
-        .input('pdf_file_path', sql.NVarChar(255), pub.pdf_file_path)
-        .input('file_size', sql.Int, pub.file_size)
-        .input('published_date', sql.Date, new Date(pub.published_date))
-        .query(`
-          INSERT INTO Publications (title, summary, content, category_id, pdf_file_path, file_size, published_date)
-          VALUES (@title, @summary, @content, @category_id, @pdf_file_path, @file_size, @published_date)
-        `);
+      await runQuery(db, `
+        INSERT INTO Publications (title, summary, content, category_id, pdf_file_path, file_size, published_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        pub.title, 
+        pub.summary, 
+        pub.content, 
+        pub.category_id, 
+        pub.pdf_file_path, 
+        pub.file_size, 
+        pub.published_date
+      ]);
     }
     
     logger.info('Publications seeded successfully.');
@@ -391,16 +550,28 @@ const seedPublications = async (pool) => {
 };
 
 // Seed newspapers
-const seedNewspapers = async (pool) => {
+const seedNewspapers = async (db) => {
   try {
     logger.info('Seeding newspapers...');
     
     // Check if any newspapers exist
-    const newspaperCount = await pool.request().query('SELECT COUNT(*) as count FROM Newspapers');
+    const newspaperCount = await getQuery(db, 'SELECT COUNT(*) as count FROM Newspapers');
     
-    if (newspaperCount.recordset[0].count > 0) {
+    if (newspaperCount && newspaperCount.count > 0) {
       logger.info('Newspapers already exist, skipping newspaper seeding.');
       return;
+    }
+    
+    // Create uploads directories if they don't exist
+    const newspapersDir = path.join(__dirname, '../../uploads/newspapers');
+    const imagesDir = path.join(__dirname, '../../uploads/images');
+    
+    if (!fs.existsSync(newspapersDir)) {
+      fs.mkdirSync(newspapersDir, { recursive: true });
+    }
+    
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
     }
     
     // Default newspapers
@@ -448,16 +619,16 @@ const seedNewspapers = async (pool) => {
     
     // Insert newspapers
     for (const paper of newspapers) {
-      await pool.request()
-        .input('title', sql.NVarChar(255), paper.title)
-        .input('description', sql.NVarChar(sql.MAX), paper.description)
-        .input('pdf_file_path', sql.NVarChar(255), paper.pdf_file_path)
-        .input('issue_date', sql.Date, new Date(paper.issue_date))
-        .input('cover_image_path', sql.NVarChar(255), paper.cover_image_path)
-        .query(`
-          INSERT INTO Newspapers (title, description, pdf_file_path, issue_date, cover_image_path)
-          VALUES (@title, @description, @pdf_file_path, @issue_date, @cover_image_path)
-        `);
+      await runQuery(db, `
+        INSERT INTO Newspapers (title, description, pdf_file_path, issue_date, cover_image_path)
+        VALUES (?, ?, ?, ?, ?)
+      `, [
+        paper.title, 
+        paper.description, 
+        paper.pdf_file_path, 
+        paper.issue_date, 
+        paper.cover_image_path
+      ]);
     }
     
     logger.info('Newspapers seeded successfully.');
