@@ -1358,7 +1358,6 @@ const swaggerOptions = {
 };
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
-
 // Export the standard Swagger-UI middlewares
 module.exports = {
   serve: swaggerUi.serve,
