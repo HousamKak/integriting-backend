@@ -1,5 +1,5 @@
 # Multi-stage Node.js backend Dockerfile
-FROM node:18-alpine as base
+FROM node:18-alpine AS base
 
 # Set working directory
 WORKDIR /app
@@ -11,7 +11,7 @@ COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 # Install all dependencies (including devDependencies)
 RUN npm ci
@@ -37,7 +37,7 @@ EXPOSE 5000
 CMD ["npm", "run", "dev"]
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 # Copy source code
 COPY . .
@@ -60,15 +60,15 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "const http = require('http'); \
     const options = { \
-        hostname: 'localhost', \
-        port: process.env.PORT || 5000, \
-        path: '/health', \
-        method: 'GET', \
-        timeout: 2000 \
+    hostname: 'localhost', \
+    port: process.env.PORT || 5000, \
+    path: '/health', \
+    method: 'GET', \
+    timeout: 2000 \
     }; \
     const req = http.request(options, (res) => { \
-        if (res.statusCode === 200) process.exit(0); \
-        else process.exit(1); \
+    if (res.statusCode === 200) process.exit(0); \
+    else process.exit(1); \
     }); \
     req.on('error', () => process.exit(1)); \
     req.on('timeout', () => process.exit(1)); \
