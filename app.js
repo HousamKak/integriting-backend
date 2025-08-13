@@ -24,6 +24,16 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Swagger API docs
 app.use('/api-docs', swagger.serve, swagger.setup);
 
+// Health check endpoint for Docker
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/publications', require('./routes/publications'));
