@@ -13,7 +13,9 @@ const app = express();
 
 // Middleware
 app.use(helmet()); // Security headers
-app.use(cors());   // CORS
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+}));   // CORS
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(morgan('dev')); // Logging

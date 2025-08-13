@@ -5,13 +5,13 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
 // Ensure the data directory exists
-const dataDir = path.join(__dirname, '../data');
+const dataDir = path.dirname(process.env.DB_PATH || path.join(__dirname, '../data/integriting.db'));
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
 // Database file path
-const dbPath = path.join(dataDir, 'integriting.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, '../data/integriting.db');
 
 // Get database connection
 const getConnection = () => {
