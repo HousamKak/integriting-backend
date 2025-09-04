@@ -1,51 +1,139 @@
 // routes/admin.js
 const express = require('express');
 const router = express.Router();
+const { getConnection, getAllQuery, getQuery } = require('../config/database');
 
-// Simple dashboard stats endpoint
+// Dashboard stats endpoint
 router.get('/dashboard/stats', async (req, res) => {
+  let db;
   try {
-    // For now, return mock data. In production, this would query the database
+    db = await getConnection();
+    
+    // Get current counts for each table
+    const publicationsResult = await getQuery(db, 'SELECT COUNT(*) as count FROM Publications');
+    const servicesResult = await getQuery(db, 'SELECT COUNT(*) as count FROM Services');
+    const seminarsResult = await getQuery(db, 'SELECT COUNT(*) as count FROM Seminars');
+    const newspapersResult = await getQuery(db, 'SELECT COUNT(*) as count FROM Newspapers');
+    const whistleblowerResult = await getQuery(db, 'SELECT COUNT(*) as count FROM WhistleblowerReports');
+
+    const publicationsCount = publicationsResult.count;
+    const servicesCount = servicesResult.count;
+    const seminarsCount = seminarsResult.count;
+    const newspapersCount = newspapersResult.count;
+    const whistleblowerCount = whistleblowerResult.count;
+
+    // Get recent activity from last 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    // Get recent publications
+    const recentPublications = await getAllQuery(db, `
+      SELECT id, title, created_at FROM Publications 
+      WHERE created_at >= ? 
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `, [sevenDaysAgo]);
+    
+    // Get recent seminars
+    const recentSeminars = await getAllQuery(db, `
+      SELECT id, title, created_at FROM Seminars 
+      WHERE created_at >= ? 
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `, [sevenDaysAgo]);
+    
+    // Get recent services
+    const recentServices = await getAllQuery(db, `
+      SELECT id, title, created_at FROM Services 
+      WHERE created_at >= ? 
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `, [sevenDaysAgo]);
+    
+    // Get recent whistleblower reports
+    const recentReports = await getAllQuery(db, `
+      SELECT id, name, is_anonymous, created_at FROM WhistleblowerReports 
+      WHERE created_at >= ? 
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `, [sevenDaysAgo]);
+
+    // Combine all recent activities
+    const recentActivity = [];
+    
+    recentPublications.forEach(pub => {
+      recentActivity.push({
+        id: pub.id,
+        type: 'publication',
+        action: 'created',
+        item: pub.title,
+        user: 'Admin',
+        date: pub.created_at,
+        icon: '📚'
+      });
+    });
+    
+    recentSeminars.forEach(sem => {
+      recentActivity.push({
+        id: sem.id,
+        type: 'seminar',
+        action: 'created',
+        item: sem.title,
+        user: 'Admin',
+        date: sem.created_at,
+        icon: '🎤'
+      });
+    });
+    
+    recentServices.forEach(svc => {
+      recentActivity.push({
+        id: svc.id,
+        type: 'service',
+        action: 'created',
+        item: svc.title,
+        user: 'Admin',
+        date: svc.created_at,
+        icon: '🛠️'
+      });
+    });
+    
+    recentReports.forEach(rep => {
+      recentActivity.push({
+        id: rep.id,
+        type: 'whistleblower',
+        action: 'received',
+        item: rep.is_anonymous ? 'Anonymous Report' : `Report from ${rep.name}`,
+        user: 'System',
+        date: rep.created_at,
+        icon: '🛡️'
+      });
+    });
+    
+    // Sort by date and take latest 10
+    recentActivity.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const limitedActivity = recentActivity.slice(0, 10);
+
     const stats = {
-      publications: 12,
-      publicationsChange: +8,
-      services: 6, 
-      servicesChange: +2,
-      seminars: 8,
-      seminarsChange: +3,
-      newspapers: 4,
-      newspapersChange: +1,
-      whistleblowerReports: 3,
-      reportsChange: +1,
-      recentActivity: [
-        {
-          id: 1,
-          type: 'publication',
-          title: 'New Corporate Governance Guide published',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-          user: 'Administrator'
-        },
-        {
-          id: 2,
-          type: 'seminar', 
-          title: 'Risk Management Seminar scheduled',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-          user: 'Administrator'
-        },
-        {
-          id: 3,
-          type: 'report',
-          title: 'New whistleblower report received',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), // 4 hours ago
-          user: 'System'
-        }
-      ]
+      publications: publicationsCount,
+      publicationsChange: 0, // Would need historical data to calculate changes
+      services: servicesCount,
+      servicesChange: 0,
+      seminars: seminarsCount,
+      seminarsChange: 0,
+      newspapers: newspapersCount,
+      newspapersChange: 0,
+      whistleblowerReports: whistleblowerCount,
+      reportsChange: 0,
+      recentActivity: limitedActivity
     };
 
     res.json(stats);
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ message: 'Failed to fetch dashboard statistics' });
+  } finally {
+    if (db) {
+      db.close();
+    }
   }
 });
 
