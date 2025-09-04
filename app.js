@@ -14,7 +14,12 @@ const app = express();
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  origin: [
+    'http://localhost:3000',  // Frontend dev server (default Vite port)
+    'http://localhost:5173',  // Vite dev server (alternative port)
+    'http://localhost:4173',  // Vite preview server
+    process.env.CORS_ORIGIN   // Environment specific origin
+  ].filter(Boolean)
 }));   // CORS
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
@@ -44,6 +49,7 @@ app.use('/api/seminars', require('./routes/seminars'));
 app.use('/api/newspapers', require('./routes/newspapers'));
 app.use('/api/whistleblower', require('./routes/whistleblower'));
 app.use('/api/uploads', require('./routes/uploads'));
+app.use('/api/admin', require('./routes/admin'));
 
 // In production, serve the React app's build
 if (process.env.NODE_ENV === 'production') {
