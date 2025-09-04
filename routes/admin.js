@@ -3,6 +3,134 @@ const express = require('express');
 const router = express.Router();
 const { getConnection, getAllQuery, getQuery } = require('../config/database');
 
+// Health check endpoints
+router.get('/health', async (req, res) => {
+  const healthStatus = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    services: {
+      backend: {
+        status: 'healthy',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        version: process.version
+      },
+      database: {
+        status: 'checking',
+        error: null
+      }
+    }
+  };
+
+  // Test database connection
+  let db;
+  try {
+    db = await getConnection();
+    await getQuery(db, 'SELECT 1 as test');
+    healthStatus.services.database.status = 'healthy';
+  } catch (error) {
+    console.error('Database health check failed:', error);
+    healthStatus.services.database.status = 'unhealthy';
+    healthStatus.services.database.error = error.message;
+    healthStatus.status = 'degraded';
+  } finally {
+    if (db) {
+      db.close();
+    }
+  }
+
+  // Set HTTP status based on overall health
+  const httpStatus = healthStatus.status === 'healthy' ? 200 : 503;
+  res.status(httpStatus).json(healthStatus);
+});
+
+// Database-specific health check
+router.get('/health/database', async (req, res) => {
+  const dbHealth = {
+    status: 'checking',
+    timestamp: new Date().toISOString(),
+    database: {
+      type: 'sqlite3',
+      path: process.env.DB_PATH || 'default',
+      connection: 'checking',
+      tables: {},
+      error: null
+    }
+  };
+
+  let db;
+  try {
+    // Test connection
+    db = await getConnection();
+    dbHealth.database.connection = 'healthy';
+
+    // Check if main tables exist and get row counts
+    const tableNames = ['Users', 'Publications', 'Services', 'Seminars', 'Newspapers', 'WhistleblowerReports', 'Categories'];
+    
+    for (const tableName of tableNames) {
+      try {
+        const tableExists = await getQuery(db, 
+          "SELECT name FROM sqlite_master WHERE type='table' AND name=?", 
+          [tableName]
+        );
+        
+        if (tableExists) {
+          const countResult = await getQuery(db, `SELECT COUNT(*) as count FROM ${tableName}`);
+          dbHealth.database.tables[tableName] = {
+            exists: true,
+            rowCount: countResult.count
+          };
+        } else {
+          dbHealth.database.tables[tableName] = {
+            exists: false,
+            rowCount: 0
+          };
+        }
+      } catch (tableError) {
+        dbHealth.database.tables[tableName] = {
+          exists: false,
+          error: tableError.message
+        };
+      }
+    }
+
+    dbHealth.status = 'healthy';
+  } catch (error) {
+    console.error('Database health check failed:', error);
+    dbHealth.status = 'unhealthy';
+    dbHealth.database.connection = 'failed';
+    dbHealth.database.error = error.message;
+  } finally {
+    if (db) {
+      db.close();
+    }
+  }
+
+  const httpStatus = dbHealth.status === 'healthy' ? 200 : 503;
+  res.status(httpStatus).json(dbHealth);
+});
+
+// Backend service health check
+router.get('/health/backend', (req, res) => {
+  const backendHealth = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    backend: {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: process.version,
+      environment: process.env.NODE_ENV || 'development',
+      pid: process.pid,
+      platform: process.platform,
+      arch: process.arch
+    }
+  };
+
+  res.status(200).json(backendHealth);
+});
+
 // Dashboard stats endpoint
 router.get('/dashboard/stats', async (req, res) => {
   let db;
