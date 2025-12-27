@@ -304,7 +304,7 @@ const seedServices = async (db) => {
     const services = [
       {
         title: 'Governance Consulting',
-        description: 'Comprehensive auditing and advisory services to help organizations establish robust governance frameworks, enhance transparency, and improve decision-making processes.',
+        description: 'Comprehensive advisory services to help organizations establish robust governance frameworks, enhance transparency, and improve decision-making processes.',
         icon: 'governance',
         order_number: 1
       },
