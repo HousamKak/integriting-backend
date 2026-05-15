@@ -142,6 +142,20 @@ const initializeDatabase = async () => {
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
       `);
+
+      // Create ServiceLogos table
+      await runQuery(db, `
+        CREATE TABLE ServiceLogos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          service_id INTEGER NOT NULL,
+          client_name TEXT,
+          logo_url TEXT NOT NULL,
+          order_number INTEGER,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (service_id) REFERENCES Services(id) ON DELETE CASCADE
+        )
+      `);
       
       // Create Seminars table
       await runQuery(db, `
@@ -192,8 +206,22 @@ const initializeDatabase = async () => {
       console.log('Database tables created successfully');
       
       // Create default admin user
+      const isProduction = process.env.NODE_ENV === 'production';
+      const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+
+      if (isProduction) {
+        // Refuse to seed a guessable admin account in production.
+        if (!adminPassword || adminPassword === 'admin123' || adminPassword.length < 10) {
+          throw new Error(
+            'FATAL: ADMIN_DEFAULT_PASSWORD is missing or weak. Set a strong ' +
+            '(>=10 char, not "admin123") ADMIN_DEFAULT_PASSWORD via the runtime ' +
+            'environment before first startup in production.'
+          );
+        }
+      }
+
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD || 'admin123', salt);
+      const passwordHash = await bcrypt.hash(adminPassword || 'admin123', salt);
       
       await runQuery(db, `
         INSERT INTO Users (username, email, password_hash, role)
@@ -201,8 +229,28 @@ const initializeDatabase = async () => {
       `, ['admin', process.env.ADMIN_EMAIL || 'admin@integriting.com', passwordHash, 'admin']);
       
       console.log('Default admin user created');
+    } else {
+      // For existing databases, check if ServiceLogos table exists
+      const serviceLogosTableCheck = await getQuery(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='ServiceLogos'");
+
+      if (!serviceLogosTableCheck) {
+        console.log('Adding ServiceLogos table to existing database...');
+        await runQuery(db, `
+          CREATE TABLE ServiceLogos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service_id INTEGER NOT NULL,
+            client_name TEXT,
+            logo_url TEXT NOT NULL,
+            order_number INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (service_id) REFERENCES Services(id) ON DELETE CASCADE
+          )
+        `);
+        console.log('ServiceLogos table created successfully');
+      }
     }
-    
+
     console.log('Database initialization complete');
     db.close();
   } catch (err) {

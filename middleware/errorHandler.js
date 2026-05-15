@@ -22,6 +22,9 @@ const errorHandler = (err, req, res, next) => {
   // Handle specific error types
   if (err.name === 'ValidationError') {
     statusCode = 400;
+  } else if (err.name === 'MulterError') {
+    // File too large / too many files / unexpected field, etc.
+    statusCode = 400;
   } else if (err.name === 'UnauthorizedError') {
     statusCode = 401;
   } else if (err.name === 'ForbiddenError') {

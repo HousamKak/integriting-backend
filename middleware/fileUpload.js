@@ -77,6 +77,17 @@ const storage = multer.diskStorage({
   }
 });
 
+// Build a 400 (not 500) error for rejected file types. The central
+// errorHandler maps name === 'ValidationError' to HTTP 400 and never leaks
+// a stack trace in production.
+const invalidFileTypeError = (message) => {
+  const err = new Error(message);
+  err.name = 'ValidationError';
+  err.statusCode = 400;
+  err.code = 'INVALID_FILE_TYPE';
+  return err;
+};
+
 // File filter
 const fileFilter = (req, file, cb) => {
   // Define allowed MIME types
@@ -101,7 +112,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`File type not allowed. Allowed types: ${allowedMimeTypes.join(', ')}`), false);
+    cb(invalidFileTypeError(`File type not allowed. Allowed types: ${allowedMimeTypes.join(', ')}`), false);
   }
 };
 
@@ -112,7 +123,7 @@ exports.uploadPDF = multer({
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'), false);
+      cb(invalidFileTypeError('Only PDF files are allowed'), false);
     }
   },
   limits: {
@@ -126,7 +137,7 @@ exports.uploadImage = multer({
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(invalidFileTypeError('Only image files are allowed'), false);
     }
   },
   limits: {
@@ -142,7 +153,7 @@ exports.uploadNewspaper = multer({
     } else if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF and image files are allowed'), false);
+      cb(invalidFileTypeError('Only PDF and image files are allowed'), false);
     }
   },
   limits: {

@@ -4,12 +4,17 @@ const cors = require('cors');
 const path = require('path');
 const morgan = require('morgan');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const errorHandler = require('./middleware/errorHandler').errorHandler;
 const notFoundHandler = require('./middleware/errorHandler').notFoundHandler;
 const swagger = require('./config/swagger');
 
 // Create Express app
 const app = express();
+
+// Trust the single nginx reverse proxy in front of the app so req.ip and
+// rate limiting use the real client IP (X-Forwarded-For), not 127.0.0.1.
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet()); // Security headers
@@ -41,6 +46,24 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Rate limiting. A generous global cap on the API, plus a strict cap on the
+// login endpoint to slow credential brute-forcing.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' }
+});
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/publications', require('./routes/publications'));
@@ -53,10 +76,10 @@ app.use('/api/admin', require('./routes/admin'));
 
 // In production, serve the React app's build
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../integriting-frontend/build')));
+  app.use(express.static(path.join(__dirname, '../integriting-frontend/dist')));
 
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../integriting-frontend/build/index.html'));
+    res.sendFile(path.join(__dirname, '../integriting-frontend/dist/index.html'));
   });
 }
 

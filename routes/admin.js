@@ -2,6 +2,12 @@
 const express = require('express');
 const router = express.Router();
 const { getConnection, getAllQuery, getQuery } = require('../config/database');
+const authMiddleware = require('../middleware/auth');
+
+// Every /api/admin/* route requires a valid admin token.
+// (The public, unauthenticated container health check is the top-level
+// /health endpoint in app.js, which is unaffected by this.)
+router.use(authMiddleware.verifyToken, authMiddleware.isAdmin);
 
 // Health check endpoints
 router.get('/health', async (req, res) => {
@@ -178,10 +184,12 @@ router.get('/dashboard/stats', async (req, res) => {
     `, [sevenDaysAgo]);
     
     // Get recent whistleblower reports
+    // Do NOT select reporter name/email here — the dashboard activity feed
+    // must never surface whistleblower identities, even to admins.
     const recentReports = await getAllQuery(db, `
-      SELECT id, name, is_anonymous, created_at FROM WhistleblowerReports 
-      WHERE created_at >= ? 
-      ORDER BY created_at DESC 
+      SELECT id, is_anonymous, created_at FROM WhistleblowerReports
+      WHERE created_at >= ?
+      ORDER BY created_at DESC
       LIMIT 5
     `, [sevenDaysAgo]);
 
@@ -229,7 +237,7 @@ router.get('/dashboard/stats', async (req, res) => {
         id: rep.id,
         type: 'whistleblower',
         action: 'received',
-        item: rep.is_anonymous ? 'Anonymous Report' : `Report from ${rep.name}`,
+        item: rep.is_anonymous ? 'Anonymous report received' : 'Identified report received',
         user: 'System',
         date: rep.created_at,
         icon: '🛡️'
