@@ -3,12 +3,11 @@ const express = require('express');
 const router = express.Router();
 const newspaperController = require('../controllers/newspaperController');
 const authMiddleware = require('../middleware/auth');
-const multer = require('multer');
-const { uploadPDF, uploadImage } = require('../middleware/fileUpload');
+const { uploadNewspaper } = require('../middleware/fileUpload');
 
-// Configure multer for multiple file types
-const upload = multer();
-const multiUpload = upload.fields([
+// Disk-backed storage (memory storage has no file.path and never persists
+// the file, which broke newspaper create/update entirely).
+const multiUpload = uploadNewspaper.fields([
   { name: 'pdf_file', maxCount: 1 },
   { name: 'cover_image', maxCount: 1 }
 ]);

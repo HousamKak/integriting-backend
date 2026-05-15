@@ -86,6 +86,7 @@ const initializeDatabase = async () => {
           category_id INT,
           pdf_file_path NVARCHAR(255),
           file_size INT,
+          cover_image_path NVARCHAR(255),
           published_date DATE NOT NULL,
           created_at DATETIME NOT NULL DEFAULT GETDATE(),
           updated_at DATETIME NOT NULL DEFAULT GETDATE(),
@@ -167,9 +168,21 @@ const initializeDatabase = async () => {
         .query(`
           INSERT INTO Users (username, email, password_hash, role)
           VALUES (@username, @email, @password_hash, @role)
-        `);
+      `);
       
       console.log('Default admin user created');
+    } else {
+      const publicationCoverColumnCheck = await pool.request().query(`
+        SELECT COL_LENGTH('dbo.Publications', 'cover_image_path') as ColumnLength
+      `);
+
+      if (!publicationCoverColumnCheck.recordset[0].ColumnLength) {
+        console.log('Adding cover_image_path column to Publications...');
+        await pool.request().query(`
+          ALTER TABLE Publications ADD cover_image_path NVARCHAR(255)
+        `);
+        console.log('Publications cover_image_path column added successfully');
+      }
     }
     
     console.log('Database initialization complete');

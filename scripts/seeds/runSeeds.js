@@ -109,6 +109,7 @@ const createSchema = async (db) => {
         category_id INTEGER,
         pdf_file_path TEXT,
         file_size INTEGER,
+        cover_image_path TEXT,
         published_date DATE NOT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

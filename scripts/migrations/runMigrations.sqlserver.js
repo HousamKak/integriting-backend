@@ -209,6 +209,7 @@ CREATE TABLE Publications (
     category_id INT,
     pdf_file_path NVARCHAR(255),
     file_size INT,
+    cover_image_path NVARCHAR(255),
     published_date DATE NOT NULL,
     created_at DATETIME NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME NOT NULL DEFAULT GETDATE(),

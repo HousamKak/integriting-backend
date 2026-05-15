@@ -100,6 +100,7 @@ const swaggerOptions = {
             category: { type: 'string' },
             pdf_file_path: { type: 'string' },
             file_size: { type: 'integer' },
+            cover_image_path: { type: 'string' },
             published_date: { type: 'string', format: 'date' }
           }
         },
@@ -111,6 +112,7 @@ const swaggerOptions = {
             content: { type: 'string' },
             summary: { type: 'string' },
             category_id: { type: 'integer' },
+            cover_image: { type: 'string', format: 'binary' },
             published_date: { type: 'string', format: 'date' }
           }
         },

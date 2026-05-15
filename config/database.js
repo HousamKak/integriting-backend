@@ -123,6 +123,7 @@ const initializeDatabase = async () => {
           category_id INTEGER,
           pdf_file_path TEXT,
           file_size INTEGER,
+          cover_image_path TEXT,
           published_date DATE NOT NULL,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -248,6 +249,15 @@ const initializeDatabase = async () => {
           )
         `);
         console.log('ServiceLogos table created successfully');
+      }
+
+      const publicationColumns = await getAllQuery(db, 'PRAGMA table_info(Publications)');
+      const hasPublicationCoverImage = publicationColumns.some(column => column.name === 'cover_image_path');
+
+      if (!hasPublicationCoverImage) {
+        console.log('Adding cover_image_path column to Publications...');
+        await runQuery(db, 'ALTER TABLE Publications ADD COLUMN cover_image_path TEXT');
+        console.log('Publications cover_image_path column added successfully');
       }
     }
 

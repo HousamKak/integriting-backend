@@ -3,6 +3,22 @@ const { getConnection, getQuery, getAllQuery, runQuery } = require('../config/da
 const fs = require('fs');
 const path = require('path');
 
+// issue_date drives strftime('%Y', issue_date) year filtering; an unparseable
+// value silently disappears from the year list, so reject it up front.
+const isValidDate = (d) =>
+  typeof d === 'string' && d.trim() !== '' && !Number.isNaN(Date.parse(d));
+
+const cleanupReqFiles = (req) => {
+  if (!req.files) return;
+  ['pdf_file', 'cover_image'].forEach((f) => {
+    if (req.files[f] && req.files[f][0]) {
+      fs.unlink(req.files[f][0].path, (e) => {
+        if (e) console.error(`Error deleting file: ${e}`);
+      });
+    }
+  });
+};
+
 // Get all newspapers
 exports.getAllNewspapers = async (req, res) => {
   const { year } = req.query;
@@ -93,7 +109,13 @@ exports.createNewspaper = async (req, res) => {
   
   // Check if required files are present
   if (!req.files || !req.files.pdf_file) {
+    cleanupReqFiles(req);
     return res.status(400).json({ message: 'PDF file is required' });
+  }
+
+  if (!isValidDate(issue_date)) {
+    cleanupReqFiles(req);
+    return res.status(400).json({ message: 'A valid issue_date is required (e.g. YYYY-MM-DD).' });
   }
   
   // Get file paths
@@ -147,10 +169,15 @@ exports.updateNewspaper = async (req, res) => {
   const { id } = req.params;
   const { title, description, issue_date } = req.body;
   let db;
-  
+
+  if (!isValidDate(issue_date)) {
+    cleanupReqFiles(req);
+    return res.status(400).json({ message: 'A valid issue_date is required (e.g. YYYY-MM-DD).' });
+  }
+
   try {
     db = await getConnection();
-    
+
     // Get current newspaper data
     const currentNewspaper = await getQuery(db, 
       'SELECT pdf_file_path, cover_image_path FROM Newspapers WHERE id = ?', 
@@ -282,10 +309,11 @@ exports.getAvailableYears = async (req, res) => {
     const years = await getAllQuery(db, `
       SELECT DISTINCT strftime('%Y', issue_date) as year
       FROM Newspapers
+      WHERE issue_date IS NOT NULL AND issue_date != ''
       ORDER BY year DESC
     `);
-    
-    res.status(200).json(years.map(item => item.year));
+
+    res.status(200).json(years.map(item => item.year).filter(Boolean));
   } catch (err) {
     console.error('Error fetching newspaper years:', err);
     res.status(500).json({ message: 'Failed to retrieve newspaper years' });
