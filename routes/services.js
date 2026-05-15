@@ -31,10 +31,41 @@ router.delete(
 );
 
 router.post(
-  '/orders', 
-  authMiddleware.verifyToken, 
-  authMiddleware.isAdmin, 
+  '/orders',
+  authMiddleware.verifyToken,
+  authMiddleware.isAdmin,
   serviceController.updateServiceOrders
+);
+
+// Service logo routes
+router.get('/:id/logos', serviceController.getServiceLogos);
+
+router.post(
+  '/:id/logos',
+  authMiddleware.verifyToken,
+  authMiddleware.isAdmin,
+  serviceController.addServiceLogo
+);
+
+router.put(
+  '/:id/logos/:logoId',
+  authMiddleware.verifyToken,
+  authMiddleware.isAdmin,
+  serviceController.updateServiceLogo
+);
+
+router.delete(
+  '/:id/logos/:logoId',
+  authMiddleware.verifyToken,
+  authMiddleware.isAdmin,
+  serviceController.deleteServiceLogo
+);
+
+router.post(
+  '/:id/logos/orders',
+  authMiddleware.verifyToken,
+  authMiddleware.isAdmin,
+  serviceController.updateServiceLogoOrders
 );
 
 module.exports = router;
